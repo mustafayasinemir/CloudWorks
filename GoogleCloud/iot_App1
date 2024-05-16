@@ -1,0 +1,92 @@
+import os
+import sys
+import pyodbc
+from google.cloud import vision_v1 as vision
+
+os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = r"iot.json"
+
+def create_table_if_not_exists():
+    # Cloud SQL Server'a bağlanma bilgileri
+    server = 'iot_App.mssql.somee.com'
+    database = 'iot_App'
+    username = 'myemirr_SQLLogin_1'
+    password = 'k88ux4fb9y'
+    driver = '{FreeTDS}'
+
+    try:
+        # Bağlantı oluşturma
+        conn = pyodbc.connect('DRIVER='+driver+';SERVER='+server+';PORT=1433;DATABASE='+database+';UID='+username+';PWD='+ password)
+        cursor = conn.cursor()
+
+        create_table_query = """
+            IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ObjectDetectionResults')
+            BEGIN
+                CREATE TABLE ObjectDetectionResults (
+                    ID INT PRIMARY KEY IDENTITY,
+                    ObjectName NVARCHAR(255),
+                    Confidence FLOAT
+                )
+            END
+        """
+        cursor.execute(create_table_query)
+        conn.commit()
+        conn.close()
+
+        print("Tablo başarıyla oluşturuldu veya mevcut.")
+    except Exception as e:
+        print("Hata oluştu:", e)
+
+def localize_objects_and_insert_to_sql(path):
+    try:
+        # Cloud SQL Server'a bağlanma bilgileri
+        server = 'iot_App.mssql.somee.com'
+        database = 'iot_App'
+        username = 'myemirr_SQLLogin_1'
+        password = 'k88ux4fb9y'
+        driver = '{FreeTDS}'
+
+        # Google Cloud Vision API istemcisini oluşturma
+        client = vision.ImageAnnotatorClient()
+
+        # Resmi okuma ve nesne tespiti işlemi
+        with open(path, 'rb') as image_file:
+            content = image_file.read()
+        image = vision.types.Image(content=content)
+        objects = client.object_localization(image=image).localized_object_annotations
+
+        # SQL'e veri eklemek için bağlantı ve cursor nesnesi oluşturma
+        conn = pyodbc.connect('DRIVER='+driver+';SERVER='+server+';PORT=1433;DATABASE='+database+';UID='+username+';PWD='+ password)
+        cursor = conn.cursor()
+
+        # Nesne tespiti sonuçlarını SQL Server'a aktarma
+        for object_ in objects:
+            object_name = object_.name
+            confidence = object_.score
+            # Örnek INSERT sorgusu
+            insert_query = f"INSERT INTO ObjectDetectionResults (ObjectName, Confidence) VALUES (?, ?)"
+            cursor.execute(insert_query, (object_name, confidence))
+
+        # Değişiklikleri kaydet ve bağlantıyı kapat
+        conn.commit()
+        conn.close()
+
+        print("Veri başarıyla Cloud SQL database aktarıldı.")
+
+        # Nesne tespiti sonuçlarını konsola yazdırma
+        print("Nesne Tespiti Sonuçları:")
+        for object_ in objects:
+            print(f"Nesne Adı: {object_.name}, Güvenilirlik: {object_.score}")
+    except Exception as e:
+        print("Hata oluştu:", e)
+
+if __name__ == "__main__":
+    # Tabloyu oluştur veya zaten mevcutsa bir şey yapma
+    create_table_if_not_exists()
+
+    # Komut satırından resim dosyasının yolunu alın
+    if len(sys.argv) != 2:
+        print("Kullanım: python script.py <resim_dosyası_yolu>")
+        sys.exit(1)
+
+    path = sys.argv[1]
+    localize_objects_and_insert_to_sql(path)
