@@ -39,11 +39,11 @@ def create_table_if_not_exists():
 def localize_objects_and_insert_to_sql(path):
     try:
         # Cloud SQL Server'a bağlanma bilgileri
-        server = 'iot_App.mssql.somee.com'
-        database = 'iot_App'
-        username = 'myemirr_SQLLogin_1'
-        password = 'k88ux4fb9y'
-        driver = '{FreeTDS}'
+    server = 'your_ServerName'
+    database = 'your_dbName'
+    username = 'your_Username'
+    password = 'your_Password'
+    driver = '{FreeTDS}'
 
         # Google Cloud Vision API istemcisini oluşturma
         client = vision.ImageAnnotatorClient()
